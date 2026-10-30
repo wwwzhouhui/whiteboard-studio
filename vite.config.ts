@@ -16,6 +16,9 @@ export default defineConfig({
       "app/routes/{home,chat.$threadId}.tsx",
     ],
   },
+  server: {
+    allowedHosts: ["c-2112431672773898241.ksai.scnet.cn", ".ksai.scnet.cn"],
+  },
   plugins: [
     ...reactRouterPlugins(),
     ...agentNativePlugins({

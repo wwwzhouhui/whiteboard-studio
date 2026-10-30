@@ -15,6 +15,7 @@ import {
   type AgentProviderId,
 } from "@agent-native/core/client/agent-provider-catalog";
 import type { ChatModelEngineEntry } from "@agent-native/core/client/chat-model-groups";
+import { agentNativePath } from "@agent-native/core/client/api-path";
 import { callAction, useActionQuery } from "@agent-native/core/client/hooks";
 import { useFormatters, useT } from "@agent-native/core/client/i18n";
 import { useLabState } from "@agent-native/core/client/labs/use-lab";
@@ -335,6 +336,7 @@ export default function ModelSettingsPage(_props: SettingsPageProps) {
             ))}
           </SettingsGroup>
         ) : null}
+        <ModelSourceGroup />
         <PersonalProvidersGroup
           listing={data}
           rows={rows.personal}
@@ -378,6 +380,165 @@ export default function ModelSettingsPage(_props: SettingsPageProps) {
         />
       ) : null}
     </TooltipProvider>
+  );
+}
+
+type ModelSourceStatus = {
+  source: "local" | "cloud";
+  local: {
+    label: string;
+    baseUrl: string;
+    modelId: string;
+    reachable: boolean;
+    models: string[];
+    error: string | null;
+  };
+  canRestoreCloud: boolean;
+  cloudModelId: string;
+};
+
+async function readModelSource(): Promise<ModelSourceStatus> {
+  const response = await fetch(agentNativePath("/local-model"), {
+    credentials: "include",
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return (await response.json()) as ModelSourceStatus;
+}
+
+function detailFromPayload(payload: unknown, fallback: string): string {
+  if (payload && typeof payload === "object") {
+    const record = payload as Record<string, unknown>;
+    for (const key of ["statusMessage", "message", "error", "statusText"]) {
+      const value = record[key];
+      if (typeof value === "string" && value.trim()) return value;
+    }
+  }
+  return fallback;
+}
+
+/**
+ * The openai provider lane carries one endpoint at a time. This row switches
+ * it between the saved custom API (阿里云等) and the local vLLM server, keeping
+ * the cloud key archived in the secret store while the local lane is active.
+ */
+function ModelSourceGroup() {
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState<"local" | "cloud" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const status = useQuery({
+    queryKey: ["model-source"],
+    queryFn: readModelSource,
+    refetchInterval: 60_000,
+  });
+  const data = status.data;
+  const source = data?.source ?? "local";
+  const switchTo = async (target: "local" | "cloud") => {
+    if (busy) return;
+    setBusy(target);
+    setError(null);
+    try {
+      const response = await fetch(
+        agentNativePath(target === "local" ? "/local-model" : "/cloud-model"),
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        },
+      );
+      const payload: unknown = await response.json().catch(() => null);
+      if (!response.ok)
+        throw new Error(
+          detailFromPayload(
+            payload,
+            target === "local" ? "启用本地模型失败" : "切回自定义 API 失败",
+          ),
+        );
+      const modelId =
+        payload &&
+        typeof payload === "object" &&
+        typeof (payload as Record<string, unknown>).modelId === "string"
+          ? ((payload as Record<string, unknown>).modelId as string)
+          : "";
+      if (modelId)
+        await setAgentEngineDefaultModel({
+          engine: "ai-sdk:openai",
+          model: modelId,
+          label: "OpenAI",
+        });
+      await queryClient.invalidateQueries();
+      await status.refetch();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const localDetail = data
+    ? `${data.local.baseUrl} · 模型 ${data.local.modelId || "未发现"} · ${
+        data.local.reachable ? "在线" : `离线（${data.local.error ?? "无法连接"}）`
+      }`
+    : "正在检测本地服务…";
+  return (
+    <SettingsGroup
+      title="模型来源"
+      description="自定义模型 API 与本地 vLLM 共用同一条 OpenAI 兼容通道，切换时会自动保留已保存的密钥。"
+    >
+      <SettingsRow
+        icon={<IconCpu />}
+        label={
+          source === "local"
+            ? `本地模型 · ${data?.local.label ?? "vLLM"}`
+            : "自定义模型 API"
+        }
+        status={
+          <Badge variant="secondary">
+            {source === "local" ? "本地 vLLM" : "自定义 API"}
+          </Badge>
+        }
+        description={source === "local" ? localDetail : "当前使用已保存的自定义 OpenAI 兼容端点"}
+        control={
+          source === "local" ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy !== null || !data?.canRestoreCloud}
+              onClick={() => void switchTo("cloud")}
+            >
+              {busy === "cloud" ? <Spinner /> : null}
+              切回自定义 API
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              disabled={busy !== null || !data?.local.reachable}
+              onClick={() => void switchTo("local")}
+            >
+              {busy === "local" ? <Spinner /> : null}
+              启用本地 Qwen3-8B
+            </Button>
+          )
+        }
+      >
+        {error ? (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        ) : null}
+        {status.isError ? (
+          <p role="alert" className="text-sm text-destructive">
+            模型来源状态读取失败，请稍后重试
+          </p>
+        ) : null}
+        {source === "local" && data && !data.canRestoreCloud ? (
+          <p className="text-xs text-muted-foreground">
+            还没有保存过自定义模型密钥，先到上方「添加提供商」配置后可随时切回。
+          </p>
+        ) : null}
+      </SettingsRow>
+    </SettingsGroup>
   );
 }
 

@@ -159,5 +159,13 @@
       "coreVersion": "0.221.0",
       "shape": "standalone"
     }
+  },
+  "pnpm": {
+    "overrides": {
+      "rolldown": "1.2.16"
+    },
+    "patchedDependencies": {
+      "@agent-native/core@0.221.0": "patches/@agent-native__core@0.221.0.patch"
+    }
   }
 }

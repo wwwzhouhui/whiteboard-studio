@@ -1,8 +1,6 @@
 import {
   defineEventHandler,
   readBody,
-  getHeader,
-  getRequestURL,
   createError,
 } from "h3";
 import { z } from "zod";
@@ -13,6 +11,11 @@ import { putUserSetting, putOrgSetting } from "@agent-native/core/settings";
 import keyPolicy from "@agent-native/core/agent/actions/manage-provider-key-policy";
 import modelSelection from "@agent-native/core/agent/actions/manage-provider-models";
 import readModels from "@agent-native/core/agent/actions/get-provider-models";
+import {
+  ACTIVE_MODEL_SETTING,
+  CLOUD_ARCHIVE_KEYS,
+  assertSameOrigin,
+} from "../model-endpoints.js";
 const schema = z
   .object({
     scope: z.enum(["user", "org"]),
@@ -29,12 +32,7 @@ const schema = z
   })
   .strict();
 export default defineEventHandler(async (event) => {
-  const origin = getHeader(event, "origin");
-  if (!origin || origin !== getRequestURL(event).origin)
-    throw createError({
-      statusCode: 403,
-      statusMessage: "Cross-origin credential save refused",
-    });
+  assertSameOrigin(event, "custom-model-provider");
   const session = await getSession(event);
   if (!session?.email) throw createError({ statusCode: 401 });
   const org = await getOrgContext(event);
@@ -95,29 +93,57 @@ export default defineEventHandler(async (event) => {
     key: "OPENAI_BASE_URL",
     value: url.toString().replace(/\/$/, ""),
   });
+  const selectedModels = [
+    ...new Set([...existing, ...(b.models || []), b.modelId]),
+  ];
   await modelSelection.run(
     {
       action: "set",
       provider: "openai",
       scope: b.scope,
-      models: [...new Set([...existing, ...(b.models || []), b.modelId])],
+      models: selectedModels,
     },
     ctx,
   );
+  // Keep a copy the local-model switch can restore: activating the local vLLM
+  // lane removes the live OPENAI_* secrets so the environment endpoint applies.
+  await writeAppSecret({
+    ...ref,
+    key: CLOUD_ARCHIVE_KEYS.baseUrl,
+    value: url.toString().replace(/\/$/, ""),
+  });
+  if (key)
+    await writeAppSecret({
+      ...ref,
+      key: CLOUD_ARCHIVE_KEYS.apiKey,
+      value: key,
+    });
   const meta = {
     modelId: b.modelId,
     label: b.label || b.modelId,
+    models: selectedModels,
     updatedAt: Date.now(),
     validation: "not-tested",
   };
   if (b.scope === "org")
     await putOrgSetting(scopeId, "studio.custom-model", meta);
   else await putUserSetting(scopeId, "studio.custom-model", meta);
+  if (b.scope === "user")
+    await putUserSetting(scopeId, ACTIVE_MODEL_SETTING, {
+      source: "cloud",
+      modelId: b.modelId,
+      label: meta.label,
+      baseUrl: url.toString().replace(/\/$/, ""),
+      models: selectedModels,
+      credentialScope: b.scope,
+      updatedAt: Date.now(),
+    });
   return {
     ok: true,
     scope: b.scope,
     modelId: b.modelId,
     label: meta.label,
+    models: selectedModels,
     validation: "not-tested",
   };
 });

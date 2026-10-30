@@ -656,10 +656,19 @@ function ProviderDialogForm({
           },
         );
         if (!response.ok) {
-          const failure = await response.json().catch(() => ({}));
-          throw new Error(
-            failure.statusMessage || failure.error || "自定义模型保存失败",
+          const failure: Record<string, unknown> = await response
+            .json()
+            .catch(() => ({}));
+          const detail = [
+            failure.statusMessage,
+            failure.message,
+            failure.error,
+            failure.statusText,
+          ].find(
+            (value): value is string =>
+              typeof value === "string" && value.trim().length > 0,
           );
+          throw new Error(detail ?? "自定义模型保存失败");
         }
         setKeyValue("");
         window.dispatchEvent(

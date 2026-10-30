@@ -1,0 +1,96 @@
+diff --git a/dist/server/auth.js b/dist/server/auth.js
+index f776d8e855fd20728eb4f4ccbf17d946df706173..3496943b3f8638cc487cfcd9805af9816f735b1d 100644
+--- a/dist/server/auth.js
++++ b/dist/server/auth.js
+@@ -1131,7 +1131,8 @@ function decodeCookieHeader(raw) {
+             return trimmed;
+         const name = trimmed.slice(0, eq).trim();
+         const value = decodeSessionCookieValue(trimmed.slice(eq + 1).trim());
+-        return `${name}=${value}`;
++        const safeValue = /[^\u0000-\u00ff]/.test(value) ? encodeURIComponent(value) : value;
++        return `${name}=${safeValue}`;
+     })
+         .filter(Boolean)
+         .join("; ");
+diff --git a/dist/agent/engine/ai-sdk-engine.js b/dist/agent/engine/ai-sdk-engine.js
+index f14d3cf..21d79e7 100644
+--- a/dist/agent/engine/ai-sdk-engine.js
++++ b/dist/agent/engine/ai-sdk-engine.js
+@@ -131,6 +131,40 @@ function gemini3ThinkingLevel(effort) {
+         return "medium";
+     return "high";
+ }
++// Self-hosted OpenAI-compatible servers (vLLM, Ollama's OpenAI shim) take
++// tokenizer/template switches such as `chat_template_kwargs` in the JSON body.
++// The AI SDK exposes no provider option for them, so merge an env-configured
++// body fragment here. Restricted to loopback/private endpoints so hosted
++// providers never receive foreign fields.
++function localChatTemplateKwargs(endpoint) {
++    const raw = process.env.LOCAL_MODEL_CHAT_TEMPLATE_KWARGS;
++    if (!raw)
++        return undefined;
++    let parsed;
++    try {
++        parsed = JSON.parse(raw);
++    }
++    catch {
++        return undefined;
++    }
++    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
++        return undefined;
++    let host;
++    try {
++        host = new URL(endpoint).hostname.replace(/^\[|\]$/g, "");
++    }
++    catch {
++        return undefined;
++    }
++    const isLocal = host === "localhost" ||
++        host === "0.0.0.0" ||
++        host === "::1" ||
++        /^127\./.test(host) ||
++        /^10\./.test(host) ||
++        /^192\.168\./.test(host) ||
++        /^172\.(1[6-9]|2\d|3[01])\./.test(host);
++    return isLocal ? parsed : undefined;
++}
+ export function createProviderEndpointFetch(endpoint, allowedPrivateOrigins = []) {
+     return async (input, init) => {
+         const endpointOrigin = new URL(endpoint).origin;
+@@ -145,7 +179,7 @@ export function createProviderEndpointFetch(endpoint, allowedPrivateOrigins = []
+         if (targetOrigin !== endpointOrigin) {
+             throw new Error(`SSRF blocked: provider request escaped its configured origin (${targetOrigin}).`);
+         }
+-        const requestInit = request
++        let requestInit = request
+             ? {
+                 ...(init ?? {}),
+                 method: request.method,
+@@ -163,6 +197,27 @@ export function createProviderEndpointFetch(endpoint, allowedPrivateOrigins = []
+                 ...(request.body ? { duplex: "half" } : {}),
+             }
+             : init;
++        const templateKwargs = localChatTemplateKwargs(endpoint);
++        if (templateKwargs &&
++            typeof requestInit?.body === "string" &&
++            (requestInit.method ?? "").toUpperCase() === "POST") {
++            try {
++                const payload = JSON.parse(requestInit.body);
++                if (payload &&
++                    typeof payload === "object" &&
++                    !Array.isArray(payload) &&
++                    Array.isArray(payload.messages)) {
++                    payload.chat_template_kwargs = {
++                        ...templateKwargs,
++                        ...(payload.chat_template_kwargs ?? {}),
++                    };
++                    requestInit = { ...requestInit, body: JSON.stringify(payload) };
++                }
++            }
++            catch {
++                // Not a JSON body: forward untouched.
++            }
++        }
+         const response = await ssrfSafeFetch(url, requestInit, {
+             allowedPrivateOrigins,
+             assertUrlAllowed(candidate) {
