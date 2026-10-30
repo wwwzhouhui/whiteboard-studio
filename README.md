@@ -13,7 +13,7 @@
 - 视频效果 
 
   	<p align="center">
-    <video src="https://github.com/user-attachments/assets/c9348c99-a08e-4628-891f-6e4826f0b734" controls muted playsinline width="100%"></video>
+    <video src="https://github.com/user-attachments/assets/3b1566cd-6962-4b69-980e-4e666c5d4c91" controls muted playsinline width="100%"></video>
 
   </p>
 
