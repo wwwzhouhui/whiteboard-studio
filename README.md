@@ -5,8 +5,17 @@
 大模型走标准 OpenAI 兼容接口——既可以接本机 vLLM 上的 **Qwen3-8B**（海光 K100 / 任意 GPU，零 API 费用），也可以在设置里换成任意自定义云端 API。渲染引擎、任务数据和产物都留在本机。
 
 - 官方脚手架：Agent-Native Chat（React Router 8 + Nitro）
+
 - 渲染引擎：`whiteboard-video-factory`（Playwright + ffmpeg + TTS）
+
 - 部署实录：[在海光 K100 上部署 Qwen3-8B · 白板视频制作（完整版）](<在海光 K100 上部署 Qwen3-8B-白板视频制作（完整版）.md>)
+
+- 视频效果 
+
+  	<p align="center">
+    <video src="https://github.com/user-attachments/assets/c9348c99-a08e-4628-891f-6e4826f0b734" controls muted playsinline width="100%"></video>
+
+  </p>
 
 ---
 
@@ -26,6 +35,14 @@
 - [常见问题](#常见问题)
 - [海光 K100 部署摘要](#海光-k100-部署摘要)
 - [开发与验证](#开发与验证)
+- [技术交流群](#技术交流群)
+- [作者联系](#作者联系)
+- [打赏](#打赏)
+- [Star History](#star-history)
+- [License](#license)
+- [更新日志](#更新日志)
+- [致谢](#致谢)
+- [贡献指南](#贡献指南)
 
 ---
 
@@ -300,3 +317,89 @@ OpenAI-compatible endpoint, so it runs fully offline against a local vLLM
 Qwen3-8B server, or against a cloud provider you configure in Settings →
 Model. Actions are the single contract shared by the chat agent, the UI, HTTP
 and MCP.
+
+---
+
+## 技术交流群
+
+欢迎加入技术交流群，分享你的使用心得和反馈建议：
+
+![技术交流群](https://mypicture-1258720957.cos.ap-nanjing.myqcloud.com/Obsidian/Screenshot_20261029_102501_com.tencent.mm.jpg)
+
+---
+
+## 作者联系
+
+- **微信**: laohaibao2025
+- **邮箱**: 75271002@qq.com
+
+![微信二维码](https://mypicture-1258720957.cos.ap-nanjing.myqcloud.com/Screenshot_20260123_095617_com.tencent.mm.jpg)
+
+---
+
+## 打赏
+
+如果这个项目对你有帮助，欢迎请我喝杯咖啡 ☕
+
+**微信支付**
+
+![微信支付](https://mypicture-1258720957.cos.ap-nanjing.myqcloud.com/Obsidian/image-20250914152855543.png)
+
+---
+
+## Star History
+
+如果觉得项目不错，欢迎点个 Star ⭐
+
+[![Star History Chart](https://api.star-history.com/svg?repos=wwwzhouhui/whiteboard-studio&type=Date)](https://star-history.com/#wwwzhouhui/whiteboard-studio&Date)
+
+---
+
+## License
+
+MIT License
+
+---
+
+## 更新日志
+
+### v1.1.0 (2026-10-30)
+
+**新功能**：
+- ✨ 支持本地 Qwen3-8B（vLLM），零 API 费用本地离线运行
+- ✨ 设置页新增「模型来源」面板，本地模型与云端 API 一键切换
+- ✨ 云端凭据按用户 / 组织维度自动归档与还原
+
+**改进**：
+- ⚡ 本地端点自动注入 `enable_thinking: false`，关闭 Qwen3 思考模式，加快首字响应
+- ⚡ 收紧聊天输出上限，适配 40960 token 上下文
+- 🎯 精简系统提示词、语料工具懒加载，加快本地推理速度
+
+### v1.0.0 (2026-10-29)
+
+- 🎬 首次发布：文案 → 分镜 → TTS → 逐帧渲染 → 成片，全流程本地跑通
+- 🤖 对话式编辑：Agent 通过 action 直接修改结构化分镜数据
+- 🎨 三种比例封面（4:3 / 3:4 / 9:16）+ 逐句 SRT 字幕
+- 🔊 支持 edge-tts、小米 TTS、火山引擎 TTS 多种配音
+
+---
+
+## 致谢
+
+- [Qwen3-8B](https://huggingface.co/Qwen/Qwen3-8B) — 本地大模型
+- [vLLM](https://github.com/vllm-project/vllm) — 高吞吐模型推理服务
+- [Playwright](https://playwright.dev/) — 浏览器逐帧渲染
+- [FFmpeg](https://ffmpeg.org/) — 视频合成与转码
+- [edge-tts](https://github.com/rany2/edge-tts) — 免费开箱即用的配音
+
+---
+
+## 贡献指南
+
+欢迎贡献！请：
+
+1. Fork 本仓库
+2. 创建特性分支：`git checkout -b feature/amazing-feature`
+3. 提交更改：`git commit -m 'Add amazing feature'`
+4. 推送到分支：`git push origin feature/amazing-feature`
+5. 提交 Pull Request
