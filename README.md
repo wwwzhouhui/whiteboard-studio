@@ -12,10 +12,8 @@
 
 - 视频效果 
 
-  	<p align="center">
     <video src="https://github.com/user-attachments/assets/3b1566cd-6962-4b69-980e-4e666c5d4c91" controls muted playsinline width="100%"></video>
-
-  </p>
+  
 
 ---
 
